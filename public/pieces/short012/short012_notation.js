@@ -1,5 +1,10 @@
 //#ef NOTES
 /*
+Pie start time
+pie colors
+keep pie outline
+
+
 Add 'A' or 'D' above accelerating or decelerating cursors
 Work on ictus
 
@@ -27,10 +32,14 @@ const PX_PER_SEC = 50;
 const PX_PER_FRAME = PX_PER_SEC / FRAMERATE;
 const MS_PER_FRAME = 1000.0 / FRAMERATE;
 let FRAMECOUNT = 0;
+const LEADIN_SEC = 5;
+const LEADIN_PX = LEADIN_SEC * PX_PER_SEC;
+const LEADIN_FRAMES = Math.round(LEADIN_SEC * FRAMERATE);
 //Canvas Variables
 let WORLD_W; // Calculated later in notation variables; 9 beats of notation @ 105 pixels per beat
 let WORLD_H; //calculated later with notation variables
 let canvas = {}; // canvas.panel(jspanel); canvas.div(jspanel div); canvas.svg(svg container on top of canvas.div)
+const CSRGO = 250;
 let panelTitle = "Short012"
 let cursor;
 let barsTiming = [
@@ -52,6 +61,20 @@ let barsTiming = [
   [1, 2],
   [4, 0]
 ];
+let barsTimingFrames = [];
+let totalNumFrames = 0;
+barsTiming.forEach((times, barIx) => {
+  let ta = [];
+  let barDur = times[0];
+  let restDur = times[1];
+  let tbarfrm = Math.round(barDur * FRAMERATE);
+  ta.push(tbarfrm);
+  totalNumFrames = totalNumFrames + tbarfrm;
+  let trestfrm = Math.round(restDur * FRAMERATE);
+  ta.push(trestfrm);
+  totalNumFrames = totalNumFrames + trestfrm;
+  barsTimingFrames.push(ta);
+});
 let barsPx = [];
 barsTiming.forEach((times, barIx) => {
   let ta = [];
@@ -67,6 +90,11 @@ let bars = [];
 WORLD_W = 945;
 WORLD_H = 150;
 let pie;
+let pieOutline;
+let pieTimingPerFrame = [];
+const PIERAD = 30;
+const PIEX = 250;
+const PIEY = 30;
 //Timesync
 const TS = timesync.create({
   server: '/timesync',
@@ -95,6 +123,7 @@ function animationEngine(timestamp) { //timestamp not used; timeSync server libr
 // Update Functions
 function update() {
   moveBars();
+  movePie();
 }
 //#endef Animation Engine END
 
@@ -103,6 +132,8 @@ function init() { //runs from html file: ill20231212.html <body onload='init();'
   makeCanvas();
   drawBars();
   makePie();
+  calcPieTimes();
+  console.log(pieTimingPerFrame);
   //Initialize clock and start animation engine
   let ts_Date = new Date(TS.now()); //Date stamp object from TimeSync library
   let tsNowEpochTime_MS = ts_Date.getTime(); //current time at init in Epoch Time MS
@@ -146,9 +177,9 @@ function makeCanvas() {
   //Draw static cursor
   cursor = mkSvgLine({
     svgContainer: canvas.svg,
-    x1: 250,
+    x1: CSRGO,
     y1: 0,
-    x2: 250,
+    x2: CSRGO,
     y2: WORLD_H,
     stroke: clr_limeGreen,
     strokeW: 3
@@ -160,14 +191,14 @@ function makeCanvas() {
 
 //#ef Bars
 function drawBars() {
-  let tCurPx = 450;
+  let tCurPx = 0;
   let clrNum = 0;
   barsPx.forEach((pxAr, barIx) => {
     let barLen = pxAr[0];
     let gapLen = pxAr[1];
     let tBar = mkSvgRect({
       svgContainer: canvas.svg,
-      x: tCurPx,
+      x: tCurPx + CSRGO,
       y: 70,
       w: barLen,
       h: 50,
@@ -184,7 +215,7 @@ function drawBars() {
 }
 
 function moveBars() {
-  let tx = FRAMECOUNT * -PX_PER_FRAME;
+  let tx = (FRAMECOUNT * -PX_PER_FRAME) + LEADIN_PX;
   bars.forEach((tBar) => {
     tBar.setAttributeNS(null, 'transform', "translate(" + tx.toString() + ",0)");
   });
@@ -192,37 +223,73 @@ function moveBars() {
 //#endef Bars
 
 //#ef Pie
+function calcPieTimes() {
+  barsTimingFrames.forEach((barAr, bix) => {
+    let tBarFrms = barAr[0];
+    let tRestFrms = barAr[1];
+    let degPerFrame = 360 / tBarFrms;
+    for (var i = 0; i < tBarFrms; i++) {
+      let td = {};
+      td['clr'] = TEMPO_COLORS[bix%TEMPO_COLORS.length];
+      td['deg'] = degPerFrame * i;
+      pieTimingPerFrame.push(td);
+    }
+    for (var i = 0; i < tRestFrms; i++) {
+      let td = {};
+      td['clr'] = TEMPO_COLORS[bix%TEMPO_COLORS.length];
+      td['deg'] = 0;
+      pieTimingPerFrame.push(td);
+    }
+  });
+}
+
 function makePie() {
   pie = mkSvgArc({
     svgContainer: canvas.svg,
-    x: 250,
-    y: 33,
-    radius: 30,
-    startAngle: 25,
-    endAngle: 300,
-    fill: 'green',
-    stroke: 'yellow',
-    strokeW: 1,
+    x: PIEX,
+    y: PIEY,
+    radius: PIERAD,
+    startAngle: 0,
+    endAngle: 359,
+    fill: TEMPO_COLORS[0],
+    stroke: 'none',
+    strokeW: 0,
     strokeCap: 'round' //square;round;butt
   });
   pie.setAttributeNS(null, 'display', 'yes');
+    pieOutline = mkSvgArc({
+      svgContainer: canvas.svg,
+      x: PIEX,
+      y: PIEY,
+      radius: PIERAD,
+      startAngle: 0,
+      endAngle: 359,
+      fill: 'none',
+      stroke: clr_neonMagenta,
+      strokeW: 2,
+      strokeCap: 'round' //square;round;butt
+    });
+    pieOutline.setAttributeNS(null, 'display', 'yes');
 }
 
 function movePie() {
-  //calculate new starting point in frames for bars and arcs
-  //using bar time, calculate dur of each arc in degrees per frame
-  //use this as a function to calculate new path and then set
-  let start = polarToCartesian(x, y, radius, endAngle);
-  let end = polarToCartesian(x, y, radius, startAngle);
-  let arcSweep = endAngle - startAngle <= 180 ? "0" : "1";
-  let d = [
-    "M", start.x, start.y,
-    "A", radius, radius, 0, arcSweep, 0, end.x, end.y,
-    "L", x, y,
-    "L", start.x, start.y
-  ].join(" ");
-  arc.setAttributeNS(null, "d", d); //describeArc makes 12'0clock =0degrees
-
+  let pieClock = FRAMECOUNT - LEADIN_FRAMES;
+  if (pieClock >= 0) {
+    let endAngle = pieTimingPerFrame[pieClock].deg;
+    let tClr = pieTimingPerFrame[pieClock].clr
+    let startAngle = 0;
+    let start = polarToCartesian(PIEX, PIEY, PIERAD, endAngle);
+    let end = polarToCartesian(PIEX, PIEY, PIERAD, startAngle);
+    let arcSweep = endAngle - startAngle <= 180 ? "0" : "1";
+    let d = [
+      "M", start.x, start.y,
+      "A", PIERAD, PIERAD, 0, arcSweep, 0, end.x, end.y,
+      "L", PIEX, PIEY,
+      "L", start.x, start.y
+    ].join(" ");
+    pie.setAttributeNS(null, "d", d); //describeArc makes 12'0clock =0degrees
+    pie.setAttributeNS(null, "fill", tClr);
+  }
 }
 //#endef Pie
 
